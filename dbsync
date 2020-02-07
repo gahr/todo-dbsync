@@ -154,22 +154,53 @@ function raw_sha256()
     openssl dgst -sha256 -hex | awk '{print $2}'
 }
 
+function math_add()
+{
+    x="$1"
+    y="$2"
+
+    dc -e "$x $y + p"
+}
+
+function math_mul()
+{
+    x="$1"
+    y="$2"
+
+    dc -e "$x $y * p"
+}
+
+function math_div()
+{
+    x="$1"
+    y="$2"
+
+    dc -e "$x $y / p"
+}
+
+function math_inc()
+{
+    x="$1"
+
+    math_add "$x" 1
+}
+
 function local_hash()
 {
     file="$1"
 
     size=$(stat -f %z "$file")
     bsize=4194304
-    blocks=$(echo "$size" "$bsize" / p | dc)
-    if [ "$(echo "$blocks" "$bsize" \* p | dc)" -lt "$size" ]; then
-        blocks=$(echo "$blocks" 1 + p | dc)
+    blocks=$(math_div "$size" "$bsize")
+    if [ "$(math_mul "$blocks" "$bsize")" -lt "$size" ]; then
+        blocks=$(math_inc "$blocks")
     fi
     hash=""
     block=0
     while [ "$block" -lt "$blocks" ]; do
         bhash=$(dd bs="$bsize" count=1 skip="$block" if="$file" 2> /dev/null | raw_sha256)
         hash="${hash}${bhash}"
-        block=$(echo "$block" 1 + p | dc)
+        block=$(math_inc "$block")
     done
     # shellcheck disable=SC2001
     echo -ne "$(echo "$hash" | sed 's|\(..\)|\\x\1|g')" | raw_sha256
