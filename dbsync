@@ -231,8 +231,9 @@ function sync_one()
 
 function sync()
 {
-    for f in $TODO_DROPBOX_FILES
-    do
+    files="$1"
+
+    for f in $files; do
         sync_one "$f"
     done
 }
