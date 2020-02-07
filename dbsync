@@ -182,18 +182,22 @@ function local_time()
     stat -f "%m" "$file"
 }
 
+function is_yes()
+{
+    s="$1"
+
+    [ "$s" = yes ] || [ "$s" = YES ] || [ "$s" = Y ] || [ "$s" = y ]
+}
+
 function ask()
 {
     prompt="$1"
     default="$2"
 
-    if [ "$default" = "yes" ]; then
+    if is_yes "$default"; then
         choice="[Yn]"
-    elif [ "$default" = "no" ]; then
-        choice="[yN]"
     else
-        echo "Invalid default: $default"
-        exit 1
+        choice="[yN]"
     fi
 
     read -rp "$prompt? $choice " resp
@@ -201,7 +205,7 @@ function ask()
         resp="$default"
     fi
 
-    [ "$resp" = yes ] || [ "$resp" = YES ] || [ "$resp" = Y ] || [ "$resp" = y ]
+    is_yes "$resp"
 }
 
 function sync_one()
@@ -212,20 +216,17 @@ function sync_one()
 
     lhash=$(local_hash "$file")
     rhash=$(metadata_hash "$metadata")
-    if [ "$lhash" != "$rhash" ]; then
-        ltime=$(local_time "$file")
-        rtime=$(metadata_time "$metadata")
-        if [ "$ltime" -lt "$rtime" ]; then
-            if ask "$file is older, download" yes; then
-                db_down "$file"
-            fi
-        elif [ "$rtime" -lt "$ltime" ]; then
-            if ask "$file is newer, upload" yes; then
-                db_up "$file"
-            fi
-        else
-            echo "$file --"
-        fi
+    if [ "$lhash" = "$rhash" ]; then
+        echo "$file hasn't changed"
+        return
+    fi
+
+    ltime=$(local_time "$file")
+    rtime=$(metadata_time "$metadata")
+    if [ "$ltime" -lt "$rtime" ]; then
+        ask "$file is older, download" yes && db_down "$file"
+    elif [ "$rtime" -lt "$ltime" ]; then
+        ask "$file is newer, upload" yes && db_up "$file"
     fi
 }
 
