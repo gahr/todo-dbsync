@@ -270,6 +270,19 @@ function sync()
     done
 }
 
+action=$1
+shift
+
+function usage()
+{
+    echo "  Synchronize with dropbox:"
+    echo "    dbsync"
+    echo ""
+    exit
+}
+
+[ "$action" = "usage" ] && usage
+
 while [ ! -f "$DB_TOKEN_FILE" ]; do
     db_gen_token
 done
