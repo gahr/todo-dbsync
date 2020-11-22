@@ -27,126 +27,138 @@
 # Usage: todo dbsync
 
 # Where your todo.txt files are stored in Dropbox
-TODO_DROPBOX_PATH=/todo.txt 
+TODO_DROPBOX_PATH=/todo.txt
+
+TODO_FILE=${TODO_FILE:-}
+DONE_FILE=${DONE_FILE:-}
+REPORT_FILE=${REPORT_FILE:-}
+TODO_HOME=${TODO_HOME:-}
+
+if [ -z "${TODO_FILE}" ] || [ -z "${DONE_FILE}" ] || \
+   [ -z "${REPORT_FILE}" ] || [ -z "${TODO_HOME}" ]; then
+    echo "Required TODO variables not set"
+    exit 1
+fi
 
 # What you want to sync
-TODO_DROPBOX_FILES="$TODO_FILE $DONE_FILE $REPORT_FILE"
+TODO_DROPBOX_FILES="${TODO_FILE} ${DONE_FILE} ${REPORT_FILE}"
 
 ##############################################################################
 
 DB_FILES_ENDPOINT=https://api.dropboxapi.com/2/files
 DB_CONTENT_ENDPOINT=https://content.dropboxapi.com/2/files
 DB_APP_WEBSITE=https://www.dropbox.com/developers/apps
-DB_TOKEN_FILE="$TODO_HOME"/dbsynctoken
+DB_TOKEN_FILE="${TODO_HOME}"/dbsynctoken 
 
 TZ=UTC
 
 function epoch_to_iso()
 {
-    epoch="$1"
+    epoch="${1}"
 
-    date -j -f %s "$epoch" +"%Y-%m-%dT%H:%M:%SZ"
+    date -j -f %s "${epoch}" +"%Y-%m-%dT%H:%M:%SZ"
 }
 
 function iso_to_epoch()
 {
-    iso="$1"
+    iso="${1}"
 
-    date -j -f '%Y-%m-%dT%H:%M:%SZ' "$iso" +%s 
+    date -j -f '%Y-%m-%dT%H:%M:%SZ' "${iso}" +%s 
 }
 
 function db_gen_token()
 {
     echo "Follow these instructions to generate a Dropbox access token:"
     echo ""
-    echo "1. Log into the Dropbox apps page: $DB_APP_WEBSITE"
-    echo "2. Click on \"Create app\""
-    echo "3. Select \"Dropbox API\""
-    echo "4. Select \"Full Dropbox\""
-    echo "5. Choose a unique and descriptive name for your app"
-    echo "6. Click on \"Create app\""
-    echo "7. Under \"Generate access token\" click on the \"generate\" button"
-    echo ""
-    read -rp "8. Insert here the generated access token: " token
-    if [ -z "$token" ]; then
+    echo " 1. Log into the Dropbox apps page: ${DB_APP_WEBSITE}"
+    echo " 2. Click on \"Create app\""
+    echo " 3. At the \"Choose an API\" step, select \"Scoped access\""
+    echo " 4. At the \"Choose the type of access you need\" step, select \"Full Dropbox\""
+    echo " 5. Choose a unique and descriptive name for your app"
+    echo " 6. Click on \"Create app\""
+    echo " 7. In the \"Permissions\" tab, select the \"files.metadata.write\" and \"files.content.write\" permissions"
+    echo " 8. In the \"Settings\" tab, click on the \"generate\" button under \"Generate access token\""
+    echo " "
+    read -rp " 9. Insert here the generated access token: " token
+    if [ -z "${token}" ]; then
         echo "Invalid token"
         exit 1
     fi
-    echo "$token" | (umask 266 && cat > "$DB_TOKEN_FILE")
+    echo "${token}" | (umask 266 && cat > "${DB_TOKEN_FILE}")
 }
 
 function db_path()
 {
-    file="$1"
+    file="${1}"
 
-    echo "$TODO_DROPBOX_PATH"/"$(basename "$file")"
+    echo "${TODO_DROPBOX_PATH}"/"$(basename "${file}")"
 }
 
 function db_call()
 {
-    endpoint=$1
+    endpoint=${1}
     shift
     args=$*
 
     eval curl --silent --request POST \
-        --header \'Authorization: Bearer "$(cat "$DB_TOKEN_FILE")"\' \
-                "$endpoint" "$args"
+        --header \'Authorization: Bearer "$(cat "${DB_TOKEN_FILE}")"\' \
+                "${endpoint}" "${args}"
 }
 
 function db_up()
 {
-    file="$1"
+    file="${1}"
 
-    db_file=$(db_path "$file")
-    ltime=$(epoch_to_iso "$(local_time "$file")")
+    db_file=$(db_path "${file}")
+    ltime=$(epoch_to_iso "$(local_time "${file}")")
     # shellcheck disable=SC1083
-    body=$(db_call "$DB_CONTENT_ENDPOINT"/upload \
+    body=$(db_call "${DB_CONTENT_ENDPOINT}"/upload \
         --header \'Dropbox-API-Arg: \
-            { \"path\"            : \""$db_file"\", \
-              \"client_modified\" : \""$ltime"\",   \
+            { \"path\"            : \""${db_file}"\", \
+              \"client_modified\" : \""${ltime}"\",   \
               \"mode\"            : \"overwrite\" \
             }\' \
         --header \'Content-Type: application/octet-stream\' \
-        --data-binary @"$file")
-    echo "$body"
+        --data-binary @"${file}")
+    echo "${body}"
 }
 
 function db_down()
 {
-    file="$1"
+    file="${1}"
 
-    db_file=$(db_path "$file")
+    db_file=$(db_path "${file}")
     # shellcheck disable=SC1083
-    body=$(db_call "$DB_CONTENT_ENDPOINT"/download \
-        --header \'Dropbox-API-Arg: { \"path\" : \""$db_file"\" }\' \
-        -o "$file")
-    echo "$body"
+    body=$(db_call "${DB_CONTENT_ENDPOINT}"/download \
+        --header \'Dropbox-API-Arg: { \"path\" : \""${db_file}"\" }\' \
+        -o "${file}")
+    echo "${body}"
 }
 
 function db_metadata()
 {
-    file="$1"
+    file="${1}"
 
-    db_file="$(db_path "$file")"
+    db_file="$(db_path "${file}")"
 
     # shellcheck disable=SC1083
-    db_call "$DB_FILES_ENDPOINT"/get_metadata \
+    db_call "${DB_FILES_ENDPOINT}"/get_metadata \
         --header \'Content-Type: application/json\' \
-        --data \'{\"path\": \""$db_file"\"}\'
+        --data \'{\"path\": \""${db_file}"\"}\'
 }
 
 function metadata_hash()
 {
-    metadata="$1"
+    metadata="${1}"
 
-    echo "$metadata" | jq -r .content_hash
+    echo "${metadata}" | jq -r .content_hash
 }
 
 function metadata_time()
 {
-    metadata="$1"
+    metadata="${1}"
 
-    iso_to_epoch "$(echo "$metadata" | jq -r .client_modified)"
+    iso_to_epoch "$(echo "${metadata}" | jq -r .client_modified)"
 }
 
 function raw_sha256()
@@ -156,121 +168,125 @@ function raw_sha256()
 
 function math_add()
 {
-    x="$1"
-    y="$2"
+    x="${1}"
+    y="${2}"
 
-    dc -e "$x $y + p"
+    dc -e "${x} ${y} + p"
 }
 
 function math_mul()
 {
-    x="$1"
-    y="$2"
+    x="${1}"
+    y="${2}"
 
-    dc -e "$x $y * p"
+    dc -e "${x} ${y} * p"
 }
 
 function math_div()
 {
-    x="$1"
-    y="$2"
+    x="${1}"
+    y="${2}"
 
-    dc -e "$x $y / p"
+    dc -e "${x} ${y} / p"
 }
 
 function math_inc()
 {
-    x="$1"
+    x="${1}"
 
-    math_add "$x" 1
+    math_add "${x}" 1
 }
 
 function local_hash()
 {
-    file="$1"
+    file="${1}"
 
-    size=$(stat -f %z "$file")
+    size=$(stat -f %z "${file}")
     bsize=4194304
-    blocks=$(math_div "$size" "$bsize")
-    if [ "$(math_mul "$blocks" "$bsize")" -lt "$size" ]; then
-        blocks=$(math_inc "$blocks")
+    blocks=$(math_div "${size}" "${bsize}")
+    if [ "$(math_mul "${blocks}" "${bsize}")" -lt "${size}" ]; then
+        blocks=$(math_inc "${blocks}")
     fi
     hash=""
     block=0
-    while [ "$block" -lt "$blocks" ]; do
-        bhash=$(dd bs="$bsize" count=1 skip="$block" if="$file" 2> /dev/null | raw_sha256)
+    while [ "${block}" -lt "${blocks}" ]; do
+        bhash=$(dd bs="${bsize}" count=1 skip="${block}" if="${file}" 2> /dev/null | raw_sha256)
         hash="${hash}${bhash}"
-        block=$(math_inc "$block")
+        block=$(math_inc "${block}")
     done
     # shellcheck disable=SC2001
-    echo -ne "$(echo "$hash" | sed 's|\(..\)|\\x\1|g')" | raw_sha256
+    echo -ne "$(echo "${hash}" | sed 's|\(..\)|\\x\1|g')" | raw_sha256
 }
 
 function local_time()
 {
-    file="$1"
+    file="${1}"
 
-    stat -f "%m" "$file"
+    stat -f "%m" "${file}"
 }
 
 function is_yes()
 {
-    s="$1"
+    s="${1}"
 
-    [ "$s" = yes ] || [ "$s" = YES ] || [ "$s" = Y ] || [ "$s" = y ]
+    [ "${s}" = yes ] || [ "${s}" = YES ] || [ "${s}" = Y ] || [ "${s}" = y ]
 }
 
 function ask()
 {
-    prompt="$1"
-    default="$2"
+    prompt="${1}"
+    default="${2}"
 
-    if is_yes "$default"; then
+    if is_yes "${default}"; then
         choice="[Yn]"
     else
         choice="[yN]"
     fi
 
-    read -rp "$prompt? $choice " resp
-    if [ -z "$resp" ]; then
-        resp="$default"
+    read -rp "${prompt}? ${choice} " resp
+    if [ -z "${resp}" ]; then
+        resp="${default}"
     fi
 
-    is_yes "$resp"
+    is_yes "${resp}"
 }
 
 function sync_one()
 {
-    file="$1"
+    file="${1}"
 
-    metadata=$(db_metadata "$file")
+    metadata=$(db_metadata "${file}")
 
-    lhash=$(local_hash "$file")
-    rhash=$(metadata_hash "$metadata")
-    if [ "$lhash" = "$rhash" ]; then
-        echo "$file hasn't changed"
+    lhash=$(local_hash "${file}")
+    rhash=$(metadata_hash "${metadata}")
+    if [ "${rhash}" = "null" ]; then
+        ask "${file} is newer, upload" yes && db_up "${file}"
+        return
+    fi
+    if [ "${lhash}" = "${rhash}" ]; then
+        echo "${file} hasn't changed"
         return
     fi
 
-    ltime=$(local_time "$file")
-    rtime=$(metadata_time "$metadata")
-    if [ "$ltime" -lt "$rtime" ]; then
-        ask "$file is older, download" yes && db_down "$file"
-    elif [ "$rtime" -lt "$ltime" ]; then
-        ask "$file is newer, upload" yes && db_up "$file"
+    ltime=$(local_time "${file}")
+    rtime=$(metadata_time "${metadata}")
+    if [ "${ltime}" -lt "${rtime}" ]; then
+        ask "${file} is older, download" yes && db_down "${file}"
+    elif [ "${rtime}" -lt "${ltime}" ]; then
+        ask "${file} is newer, upload" yes && db_up "${file}"
     fi
 }
 
 function sync()
 {
-    files="$1"
+    files="${1}"
 
-    for f in $files; do
-        sync_one "$f"
+    for f in ${files}; do
+        sync_one "${f}"
     done
 }
 
-action=$1
+action=${1}
 shift
 
 function usage()
@@ -281,11 +297,11 @@ function usage()
     exit
 }
 
-[ "$action" = "usage" ] && usage
+[ "${action}" = "usage" ] && usage
 
-while [ ! -f "$DB_TOKEN_FILE" ]; do
+while [ ! -f "${DB_TOKEN_FILE}" ]; do
     db_gen_token
 done
-sync "$TODO_DROPBOX_FILES"
+sync "${TODO_DROPBOX_FILES}"
 
 # vim: ts=4 sw=4 expandtab:
