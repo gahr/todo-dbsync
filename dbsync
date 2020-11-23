@@ -76,10 +76,17 @@ function db_gen_token()
     echo " 4. At the \"Choose the type of access you need\" step, select \"Full Dropbox\""
     echo " 5. Choose a unique and descriptive name for your app"
     echo " 6. Click on \"Create app\""
-    echo " 7. In the \"Permissions\" tab, select the \"files.metadata.write\" and \"files.content.write\" permissions"
-    echo " 8. In the \"Settings\" tab, click on the \"generate\" button under \"Generate access token\""
+    echo " 7. In the \"Permissions\" tab, select these scopes:"
+    echo "    - files.metadata.write"
+    echo "    - files.metadata.read (implicit with write)"
+    echo "    - files.content.write"
+    echo "    - files.content.read"
+    echo " 8. Click on \"Submit\""
+    echo " 9. In the \"Settings\" tab, under the \"OAuth 2\" section, select"
+    echo "    \"No expiration\" under \"Access token expiration\" and click on"
+    echo "    the \"generate\" button under \"Generate access token\""
     echo " "
-    read -rp " 9. Insert here the generated access token: " token
+    read -rp "10. Insert here the generated access token: " token
     if [ -z "${token}" ]; then
         echo "Invalid token"
         exit 1
